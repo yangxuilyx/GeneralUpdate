@@ -32,6 +32,50 @@ namespace GeneralUpdate.Differential
             }
         }
 
+        public async Task Copy(string sourcePath, string targetPath, string patchPath)
+        {
+            try
+            {
+                var fileManager = new StorageManager();
+                var comparisonResult = fileManager.Compare(sourcePath, targetPath);
+                foreach (var file in comparisonResult.DifferentNodes)
+                {
+                    var tempDir = GetTempDirectory(file, targetPath, patchPath);
+                    var oldFile = comparisonResult.LeftNodes.FirstOrDefault(i => i.Name.Equals(file.Name));
+                    var newFile = file;
+
+                    if (oldFile is not null
+                        && File.Exists(oldFile.FullName)
+                        && File.Exists(newFile.FullName)
+                        && string.Equals(oldFile.RelativePath, newFile.RelativePath))
+                    {
+                        if (!StorageManager.HashEquals(oldFile.FullName, newFile.FullName))
+                        {
+                            var tempPatchPath = Path.Combine(tempDir, $"{file.Name}");
+                            //await new BinaryHandler().Clean(oldFile.FullName, newFile.FullName, tempPatchPath);
+                            File.Copy(newFile.FullName, tempPatchPath);
+                        }
+                    }
+                    else
+                    {
+                        File.Copy(newFile.FullName, Path.Combine(tempDir, Path.GetFileName(newFile.FullName)), true);
+                    }
+                }
+
+                var exceptFiles = fileManager.Except(sourcePath, targetPath);
+                if (exceptFiles is not null
+                    && exceptFiles.Any())
+                {
+                    var path = Path.Combine(patchPath, DELETE_FILES_NAME);
+                    StorageManager.CreateJson(path, exceptFiles);
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Generate error : {ex.Message} !", ex.InnerException);
+            }
+        }
+
         public async Task Clean(string sourcePath, string targetPath, string patchPath)
         {
             try
